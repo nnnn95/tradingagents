@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradingAgents · 多智能体 LLM 金融交易框架 Demo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bg4:#22272e;
+    --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
+    --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+    --green:#3fb950;--green-dim:#1a4428;
+    --red:#f85149;--red-dim:#3d1c1c;
+    --blue:#58a6ff;--blue-dim:#1c3251;
+    --purple:#bc8cff;--purple-dim:#2d1f4e;
+    --amber:#e3b341;--amber-dim:#3d2d0e;
+    --teal:#39d353;
+    --radius:10px;--radius-lg:14px;
+  }
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
+  a{color:var(--blue);text-decoration:none;}
+
+  nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:2rem;height:52px;position:sticky;top:0;z-index:100;}
+  .nav-logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;color:var(--text);}
+  .nav-badge{background:var(--green-dim);color:var(--green);font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;}
+  .nav-links{display:flex;gap:1.5rem;margin-left:auto;}
+  .nav-links a{color:var(--text2);font-size:13px;}
+  .nav-links a:hover{color:var(--text);}
+
+  /* 数据来源总体声明 */
+  .data-banner{background:linear-gradient(135deg,#1c3251,#2d1f4e);border:1px solid rgba(88,166,255,0.3);border-radius:var(--radius);padding:14px 18px;margin:1.5rem 2rem 0;display:flex;gap:14px;align-items:flex-start;}
+  .data-banner-icon{font-size:20px;flex-shrink:0;margin-top:2px;}
+  .data-banner-title{font-weight:600;font-size:13px;color:var(--blue);margin-bottom:4px;}
+  .data-banner-body{font-size:12px;color:var(--text2);line-height:1.6;}
+  .real-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(63,185,80,0.15);color:var(--green);font-size:11px;padding:1px 7px;border-radius:4px;font-weight:500;border:1px solid rgba(63,185,80,0.3);}
+  .sim-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(227,179,65,0.15);color:var(--amber);font-size:11px;padding:1px 7px;border-radius:4px;font-weight:500;border:1px solid rgba(227,179,65,0.3);}
+
+  .hero{text-align:center;padding:3rem 2rem 2rem;max-width:800px;margin:0 auto;}
+  .hero-tag{display:inline-flex;align-items:center;gap:6px;background:var(--blue-dim);color:var(--blue);font-size:12px;padding:4px 12px;border-radius:20px;margin-bottom:1.5rem;}
+  .hero h1{font-size:clamp(26px,5vw,40px);font-weight:700;line-height:1.2;margin-bottom:1rem;}
+  .hero h1 span{background:linear-gradient(135deg,#58a6ff,#bc8cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero p{color:var(--text2);font-size:15px;max-width:560px;margin:0 auto 1.5rem;}
+  .hero-stats{display:flex;justify-content:center;gap:2rem;flex-wrap:wrap;}
+  .stat{text-align:center;}
+  .stat-num{font-size:20px;font-weight:700;}
+  .stat-label{font-size:11px;color:var(--text3);margin-top:2px;}
+
+  .section{max-width:1100px;margin:0 auto;padding:1.5rem 2rem;}
+  .section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:1rem;}
+
+  /* 三段流水线架构 */
+  .pipeline{display:flex;align-items:stretch;gap:0;margin-bottom:1.5rem;}
+  .phase-box{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;}
+  .phase-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+  .phase-label span{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px;}
+  .phase-agents{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .phase-agent{display:flex;align-items:flex-start;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);}
+  .phase-agent-icon{font-size:18px;flex-shrink:0;line-height:1;}
+  .phase-agent-name{font-size:12px;font-weight:600;margin-bottom:2px;}
+  .phase-agent-desc{font-size:11px;color:var(--text2);line-height:1.4;}
+  .phase-single{display:flex;align-items:flex-start;gap:8px;padding:8px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);margin-bottom:8px;}
+  .phase-single:last-child{margin-bottom:0;}
+  .phase-connector{display:flex;align-items:center;justify-content:center;padding:0 12px;color:var(--text3);font-size:22px;flex-shrink:0;}
+  @media(max-width:700px){.pipeline{flex-direction:column;}.phase-connector{transform:rotate(90deg);padding:8px 0;}}
+  .arch-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;}
+  .arch-title{font-size:13px;font-weight:600;margin-bottom:3px;}
+  .arch-desc{font-size:12px;color:var(--text2);line-height:1.5;}
+
+  .demo-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
+  .demo-header{background:var(--bg3);border-bottom:1px solid var(--border);padding:.85rem 1.25rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;}
+  .demo-header h3{font-size:14px;font-weight:600;}
+  .ticker-btns{display:flex;gap:6px;}
+  .ticker-btn{padding:5px 13px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;font-family:'SF Mono','Fira Code',monospace;}
+  .ticker-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .ticker-btn:hover:not(.active){border-color:var(--border2);color:var(--text);}
+  .run-btn{margin-left:auto;padding:6px 16px;background:var(--green);border:none;border-radius:6px;color:#000;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s;}
+  .run-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .market-tabs{display:flex;gap:4px;margin-right:2px;}
+  .market-tab{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .market-tab.active{background:var(--purple-dim);border-color:var(--purple);color:var(--purple);}
+  .market-tab:hover:not(.active){border-color:var(--border2);color:var(--text);}
+  .market-divider{width:1px;background:var(--border);align-self:stretch;margin:0 2px;}
+
+  .demo-body{display:grid;grid-template-columns:280px 1fr;}
+  @media(max-width:700px){.demo-body{grid-template-columns:1fr;}}
+
+  .sidebar{border-right:1px solid var(--border);padding:.85rem;}
+  .agent-step{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:3px;cursor:default;}
+  .agent-step.active{background:var(--bg3);}
+  .step-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;border:2px solid var(--border);transition:all .3s;}
+  .step-icon.done{border-color:var(--green);background:var(--green-dim);}
+  .step-icon.running{border-color:var(--amber);background:var(--amber-dim);animation:pulse 1s infinite;}
+  .step-icon.pending{opacity:.4;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .step-name{font-size:12px;font-weight:500;}
+  .step-status{font-size:11px;color:var(--text3);margin-top:1px;}
+  .step-status.done{color:var(--green);}
+  .step-status.running{color:var(--amber);}
+
+  .main-panel{padding:1.1rem;overflow-y:auto;max-height:680px;}
+  .fetch-state{display:flex;align-items:center;gap:10px;padding:2.5rem;color:var(--text2);font-size:13px;}
+  .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .stock-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.85rem;flex-wrap:wrap;gap:.75rem;}
+  .stock-name{font-size:18px;font-weight:700;}
+  .stock-meta{font-size:12px;color:var(--text2);margin-top:2px;}
+  .stock-price{text-align:right;}
+  .price-num{font-size:22px;font-weight:700;font-family:'SF Mono',monospace;}
+  .price-change{font-size:12px;margin-top:2px;}
+  .up{color:var(--green);}
+  .dn{color:var(--red);}
+  .data-src{font-size:10px;color:var(--text3);margin-top:3px;}
+
+  .chart-wrap{background:var(--bg3);border-radius:var(--radius);padding:.85rem;margin-bottom:.85rem;}
+  .chart-label{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .chart-title{font-size:11px;color:var(--text3);}
+  .chart-wrap canvas{width:100%!important;height:160px!important;}
+
+  .metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:.85rem;}
+  @media(max-width:500px){.metrics-row{grid-template-columns:repeat(2,1fr);}}
+  .metric{background:var(--bg3);border-radius:8px;padding:9px 11px;}
+  .metric-label{font-size:10px;color:var(--text3);margin-bottom:3px;}
+  .metric-val{font-size:14px;font-weight:600;}
+  .metric-src{font-size:9px;color:var(--text3);margin-top:2px;}
+
+  /* 警告横幅：智能体文字是演示 */
+  .sim-warning{background:rgba(227,179,65,0.08);border:1px solid rgba(227,179,65,0.3);border-radius:8px;padding:10px 14px;margin-bottom:.85rem;display:flex;gap:10px;align-items:center;}
+  .sim-warning-text{font-size:12px;color:var(--amber);line-height:1.5;}
+
+  .agent-reports{display:flex;flex-direction:column;gap:8px;}
+  .report-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:.9rem;opacity:0;transform:translateY(8px);transition:all .4s;}
+  .report-card.visible{opacity:1;transform:none;}
+  .report-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .report-title-text{font-size:13px;font-weight:600;}
+  .report-tags{margin-left:auto;display:flex;gap:5px;}
+  .report-text{font-size:12px;color:var(--text2);line-height:1.7;}
+  .signal-row{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap;}
+  .signal{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;}
+  .signal-bull{background:var(--green-dim);color:var(--green);}
+  .signal-bear{background:var(--red-dim);color:var(--red);}
+  .signal-neu{background:var(--bg4);color:var(--text2);}
+
+  .debate-wrap{background:var(--bg4);border-radius:8px;padding:9px 11px;margin-top:7px;}
+  .debate-item{display:flex;gap:8px;margin-bottom:7px;font-size:12px;}
+  .debate-item:last-child{margin-bottom:0;}
+  .debate-role{font-weight:600;min-width:48px;flex-shrink:0;}
+  .debate-msg{color:var(--text2);line-height:1.6;}
+
+  .decision-card{border:1px solid var(--green);border-radius:var(--radius);padding:1.1rem;background:rgba(63,185,80,0.05);opacity:0;transform:translateY(8px);transition:all .4s;margin-top:8px;}
+  .decision-card.visible{opacity:1;transform:none;}
+  .decision-action{font-size:26px;font-weight:800;color:var(--green);display:flex;align-items:center;gap:8px;}
+  .decision-detail{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .dd-item{background:var(--bg3);border-radius:8px;padding:9px 11px;}
+  .dd-label{font-size:10px;color:var(--text3);margin-bottom:3px;}
+  .dd-val{font-size:13px;font-weight:600;}
+  .confidence-bar{height:5px;background:var(--bg4);border-radius:3px;margin-top:4px;overflow:hidden;}
+  .confidence-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),#2ea043);}
+  .decision-disclaimer{font-size:10px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+
+  .err-box{background:var(--red-dim);border:1px solid rgba(248,81,73,0.4);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:.85rem;}
+
+  footer{text-align:center;padding:2.5rem 2rem;color:var(--text3);font-size:12px;border-top:1px solid var(--border);margin-top:3rem;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+    TradingAgents
+  </div>
+  <span class="nav-badge">v0.2.4 课堂 Demo</span>
+  <div class="nav-links">
+    <a href="https://github.com/TauricResearch/TradingAgents" target="_blank">原版 ↗</a>
+    <a href="https://github.com/hsliuping/TradingAgents-CN" target="_blank">中文版 ↗</a>
+    <a href="https://arxiv.org/abs/2412.20138" target="_blank">论文 ↗</a>
+  </div>
+</nav>
+
+<div class="data-banner" style="max-width:1100px;margin:1.5rem auto 0;padding:14px 2rem;">
+  <div class="data-banner-icon">ℹ️</div>
+  <div>
+    <div class="data-banner-title">数据来源说明</div>
+    <div class="data-banner-body">
+      本页面包含两类内容，请严格区分：<br>
+      <span class="real-tag">● 真实数据</span> 股价、历史价格图表、PE/RSI 等行情指标 — 美股来自 <strong>雅虎财经（Yahoo Finance）</strong>，A 股来自 <strong>东方财富（Eastmoney）</strong> API，反映真实市场数据。<br>
+      <span class="sim-tag">● 流程演示</span> 各智能体分析文字、多空辩论内容、交易决策 — 为 <strong>预置示意文本</strong>，仅展示 TradingAgents 的工作流程，<u>并非真实 AI 分析师报告，不构成任何投资建议</u>。
+    </div>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="hero-tag">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/></svg>
+    多智能体 LLM 金融交易框架
+  </div>
+  <h1>让 AI 像<span>真实交易公司</span>一样思考</h1>
+  <p>TradingAgents 部署专业角色智能体团队，通过协作分析、结构化辩论与风控审批，最终输出交易决策。</p>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">73k ⭐</div><div class="stat-label">GitHub Stars</div></div>
+    <div class="stat"><div class="stat-num">6+</div><div class="stat-label">智能体角色</div></div>
+    <div class="stat"><div class="stat-num">10+</div><div class="stat-label">LLM 提供商</div></div>
+    <div class="stat"><div class="stat-num">A/港/美股</div><div class="stat-label">支持市场</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">系统架构 · 智能体协作流程</div>
+  <div class="pipeline">
+    <!-- 第一阶段：分析师团队（四个智能体并行） -->
+    <div class="phase-box">
+      <div class="phase-label">第一阶段 <span>并行分析</span></div>
+      <div class="phase-agents">
+        <div class="phase-agent">
+          <div class="phase-agent-icon">📊</div>
+          <div><div class="phase-agent-name">基本面分析师</div><div class="phase-agent-desc">财报、PE/PB、营收、自由现金流，评估内在价值</div></div>
+        </div>
+        <div class="phase-agent">
+          <div class="phase-agent-icon">💬</div>
+          <div><div class="phase-agent-name">情绪分析师</div><div class="phase-agent-desc">社交媒体情感打分，追踪散户与机构情绪分布</div></div>
+        </div>
+        <div class="phase-agent">
+          <div class="phase-agent-icon">📰</div>
+          <div><div class="phase-agent-name">新闻分析师</div><div class="phase-agent-desc">财经新闻与宏观事件，量化对股价的潜在影响</div></div>
+        </div>
+        <div class="phase-agent">
+          <div class="phase-agent-icon">📈</div>
+          <div><div class="phase-agent-name">技术分析师</div><div class="phase-agent-desc">MACD、RSI、布林带，识别趋势与支撑阻力位</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="phase-connector">→</div>
+    <!-- 第二阶段：研究员辩论 -->
+    <div class="phase-box" style="max-width:240px;flex:0 0 240px;">
+      <div class="phase-label">第二阶段 <span>结构化辩论</span></div>
+      <div class="phase-single">
+        <div class="phase-agent-icon">🐂</div>
+        <div><div class="phase-agent-name">看多研究员</div><div class="phase-agent-desc">提炼上行论点，量化目标价与催化剂</div></div>
+      </div>
+      <div class="phase-single">
+        <div class="phase-agent-icon">🐻</div>
+        <div><div class="phase-agent-name">看空研究员</div><div class="phase-agent-desc">梳理风险因素，给出下行情景与止损</div></div>
+      </div>
+      <div class="phase-single">
+        <div class="phase-agent-icon">🤝</div>
+        <div><div class="phase-agent-name">研究经理</div><div class="phase-agent-desc">综合辩论结论，输出平衡评级报告</div></div>
+      </div>
+    </div>
+    <div class="phase-connector">→</div>
+    <!-- 第三阶段：执行团队 -->
+    <div class="phase-box" style="max-width:220px;flex:0 0 220px;">
+      <div class="phase-label">第三阶段 <span>风控执行</span></div>
+      <div class="phase-single">
+        <div class="phase-agent-icon">💹</div>
+        <div><div class="phase-agent-name">交易员</div><div class="phase-agent-desc">根据报告生成具体交易方案与仓位建议</div></div>
+      </div>
+      <div class="phase-single">
+        <div class="phase-agent-icon">🛡️</div>
+        <div><div class="phase-agent-name">风控团队</div><div class="phase-agent-desc">评估市场波动与流动性，调整止损策略</div></div>
+      </div>
+      <div class="phase-single">
+        <div class="phase-agent-icon">🎯</div>
+        <div><div class="phase-agent-name">组合经理</div><div class="phase-agent-desc">最终审批决策，发送至模拟交易所执行</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:1.5rem">交互 Demo · 选择股票，查看完整分析流程</div>
+  <div class="demo-wrap">
+    <div class="demo-header">
+      <h3>模拟分析</h3>
+      <div class="market-tabs">
+        <button class="market-tab active" onclick="switchMarket('US',this)">🇺🇸 美股</button>
+        <button class="market-tab" onclick="switchMarket('CN',this)">🇨🇳 A股</button>
+      </div>
+      <div class="market-divider"></div>
+      <div class="ticker-btns" id="tickerBtns">
+        <button class="ticker-btn active" onclick="selectTicker('NVDA',this)">NVDA</button>
+        <button class="ticker-btn" onclick="selectTicker('AAPL',this)">AAPL</button>
+        <button class="ticker-btn" onclick="selectTicker('TSLA',this)">TSLA</button>
+      </div>
+      <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ 运行分析</button>
+    </div>
+    <div class="demo-body">
+      <div class="sidebar" id="sidebarSteps"></div>
+      <div class="main-panel" id="mainPanel">
+        <div class="fetch-state" id="idleMsg" style="display:flex">
+          <span style="font-size:22px">👆</span>
+          <span>选择股票后点击「运行分析」，将实时获取雅虎财经行情数据并演示智能体工作流程。</span>
+        </div>
+        <div class="fetch-state" id="loadingMsg" style="display:none">
+          <div class="spinner"></div>
+          <span id="loadingText">正在获取实时行情...</span>
+        </div>
+        <div id="stockContent" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:.5rem">
+  <div class="section-title">技术架构</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+    <div class="arch-card"><div class="arch-title" style="margin-bottom:5px">🔗 LangGraph</div><div class="arch-desc">有状态图编排框架，支持 Checkpoint 断点续跑，中断后从上次节点恢复</div></div>
+    <div class="arch-card"><div class="arch-title" style="margin-bottom:5px">🤖 多 LLM 支持</div><div class="arch-desc">GPT-5 · Gemini · Claude · DeepSeek · Qwen · GLM · Ollama 本地模型</div></div>
+    <div class="arch-card"><div class="arch-title" style="margin-bottom:5px">📦 数据源</div><div class="arch-desc">Alpha Vantage · Tushare · AKShare · BaoStock，支持 A/港/美股全市场</div></div>
+    <div class="arch-card"><div class="arch-title" style="margin-bottom:5px">🧠 决策记忆</div><div class="arch-desc">持久化决策日志，自动计算历史 alpha，注入下次分析提升判断质量</div></div>
+  </div>
+</div>
+
+<footer>
+  <p>⚠️ 本 Demo 仅用于课堂教学展示。智能体分析文字为流程示意，<strong>不构成任何投资建议</strong>。</p>
+  <p style="margin-top:6px">
+    <a href="https://github.com/TauricResearch/TradingAgents" target="_blank">TauricResearch/TradingAgents</a> ·
+    <a href="https://github.com/hsliuping/TradingAgents-CN" target="_blank">TradingAgents-CN</a> ·
+    <a href="https://arxiv.org/abs/2412.20138" target="_blank">arXiv 论文</a>
+  </p>
+</footer>
+
+<script>
+/* ===================== 流程演示文字（clearly marked as simulated） ===================== */
+const SIM_REPORTS = {
+  NVDA: {
+    reports: [
+      { icon:'📊', title:'基本面分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】在真实 TradingAgents 运行中，基本面分析师会从 Alpha Vantage 拉取最新财报数据，分析营收增长、毛利率、PE/PB、自由现金流等指标，评估公司内在价值与估值合理性，最终输出结构化基本面评级报告。',
+        signals:['营收增长分析','估值评估','自由现金流'] },
+      { icon:'💬', title:'情绪分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】情绪分析师通过 StockTwits、Reddit、X（原推特）等平台 API 抓取相关帖子，使用大语言模型进行情感打分（-1 到 +1），汇总近期多空情绪分布、机构持仓变化及散户 FOMO 程度，输出情绪评分报告。',
+        signals:['社交媒体情绪','机构持仓追踪','散热度评分'] },
+      { icon:'📰', title:'新闻分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】新闻分析师订阅 Bloomberg、Reuters 等财经新闻流，提取与该股票相关的近期重要事件，由 LLM 判断每条新闻对股价的潜在正负面影响及置信度，综合输出新闻影响报告。',
+        signals:['财经新闻解析','宏观事件关联','影响置信度评分'] },
+      { icon:'📈', title:'技术分析师', badge:'参考RSI', badgeClass:'signal-neu',
+        text:'【流程演示示意】技术分析师基于历史 OHLCV 数据计算 MACD、RSI（14日）、布林带、成交量均线等指标，识别当前趋势方向、支撑阻力位及潜在买卖信号，右侧「RSI」数据为雅虎财经真实历史价格计算所得。',
+        signals:['MACD信号','布林带位置','量价配合'] }
+    ],
+    debate:[
+      { role:'多方 🐂', color:'#3fb950', msg:'【流程演示】看多研究员综合四位分析师报告，提炼最强上行论点，量化目标价并给出核心催化剂清单。' },
+      { role:'空方 🐻', color:'#f85149', msg:'【流程演示】看空研究员提出主要风险因素，包括估值泡沫、竞争加剧、宏观风险等，给出下行情景目标价。' },
+      { role:'结论 🤝', color:'#e3b341', msg:'【流程演示】研究经理综合多空辩论，形成平衡结论，传递给交易员与风控团队进行最终裁定。' }
+    ],
+    decision:{ action:'BUY', size:'由风控模型计算', target:'由目标价模型输出', stop:'由 ATR 动态止损', confidence:75 }
+  },
+  AAPL: {
+    reports: [
+      { icon:'📊', title:'基本面分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】基本面分析师拉取苹果最新季报，重点分析 iPhone 出货量趋势、服务业务毛利率、大中华区收入占比及 Mac/iPad 产品线表现，结合 DCF 模型估算合理价值区间并与当前市值比较。',
+        signals:['iPhone出货分析','服务业务利润率','DCF估值'] },
+      { icon:'💬', title:'情绪分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】情绪分析师关注 Apple 粉丝社区与投资者社区的差异性情绪，分析新产品发布前后情绪波动，以及大型机构持仓申报文件（13F）的环比变化，综合判断市场态度。',
+        signals:['社区情绪追踪','机构持仓13F','发布会效应分析'] },
+      { icon:'📰', title:'新闻分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】新闻分析师重点监控监管合规新闻（如 DMA、反垄断）、供应链动态（台积电、立讯精密）及竞争对手发布（三星、华为）等信息，量化每条新闻对 AAPL 股价的预计影响幅度。',
+        signals:['监管合规动态','供应链新闻','竞品发布影响'] },
+      { icon:'📈', title:'技术分析师', badge:'参考RSI', badgeClass:'signal-neu',
+        text:'【流程演示示意】技术分析师基于雅虎财经历史数据计算技术指标，判断当前价格在布林带中的位置、近期高低点形成的支撑阻力、以及短中长期均线的多空排列状态。',
+        signals:['均线排列','布林带位置','量能分析'] }
+    ],
+    debate:[
+      { role:'多方 🐂', color:'#3fb950', msg:'【流程演示】看多论点聚焦 Apple Intelligence 带来的换机超级周期潜力、服务收入的高确定性增长及股票回购对 EPS 的持续提振效应。' },
+      { role:'空方 🐻', color:'#f85149', msg:'【流程演示】看空论点聚焦中国市场份额持续下滑、监管压制服务业务利润率及估值相对成熟科技公司明显溢价的合理性问题。' },
+      { role:'结论 🤝', color:'#e3b341', msg:'【流程演示】综合两方论点，形成平衡评估，进入风控流程。' }
+    ],
+    decision:{ action:'HOLD', size:'由风控模型计算', target:'由目标价模型输出', stop:'由 ATR 动态止损', confidence:55 }
+  },
+  TSLA: {
+    reports: [
+      { icon:'📊', title:'基本面分析师', badge:'谨慎', badgeClass:'signal-bear',
+        text:'【流程演示示意】基本面分析师分析特斯拉季度交付量、汽车毛利率、能源存储业务增速、FSD 渗透率及 Optimus 机器人研发进展，判断当前 PE 隐含的增长预期是否合理。',
+        signals:['交付量趋势','汽车毛利率','FSD渗透率'] },
+      { icon:'💬', title:'情绪分析师', badge:'分化', badgeClass:'signal-neu',
+        text:'【流程演示示意】特斯拉散户情绪极化明显，情绪分析师需分离「马斯克个人情绪」与「特斯拉公司情绪」，分别评分，避免混淆，同时跟踪空头仓位数据及潜在轧空燃料。',
+        signals:['情绪极化分析','空头仓位监控','马斯克事件影响'] },
+      { icon:'📰', title:'新闻分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】新闻分析师重点关注 Robotaxi 政策审批进展、各地超级工厂产能新闻、FSD 版本更新及电动车补贴政策变化，这些是特斯拉估值最主要的新闻催化剂。',
+        signals:['Robotaxi审批','超级工厂新闻','补贴政策变化'] },
+      { icon:'📈', title:'技术分析师', badge:'参考RSI', badgeClass:'signal-neu',
+        text:'【流程演示示意】技术分析师关注 TSLA 的高波动特性，重点识别关键支撑/阻力位、成交量异常放大节点及与大盘相关性变化，判断当前是趋势延续还是阶段性超买超卖。',
+        signals:['高波动特征','关键支撑阻力','与大盘相关性'] }
+    ],
+    debate:[
+      { role:'多方 🐂', color:'#3fb950', msg:'【流程演示】看多论点聚焦 Robotaxi 商业化为特斯拉打开出行平台估值框架，长期 TAM 远超当前汽车业务天花板。' },
+      { role:'空方 🐻', color:'#f85149', msg:'【流程演示】看空论点强调汽车业务毛利率承压、竞争对手快速追赶及当前估值已充分 Price-in 乐观情景的执行风险。' },
+      { role:'结论 🤝', color:'#e3b341', msg:'【流程演示】高不确定性标的，综合评估后进入风控团队进行仓位与止损设计。' }
+    ],
+    decision:{ action:'WATCH', size:'由风控模型计算', target:'由目标价模型输出', stop:'由 ATR 动态止损', confidence:50 }
+  },
+  '600519.SS': {
+    reports: [
+      { icon:'📊', title:'基本面分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】在真实 TradingAgents 运行中，基本面分析师会从 Tushare 或 AKShare 拉取贵州茅台最新财报，分析飞天茅台出厂价与批发价价差、吨酒净利润、经销商渠道库存、预收账款变化等白酒特有指标，结合高 ROE 和净利率评估内在价值。',
+        signals:['吨酒利润分析','渠道库存追踪','预收账款变化'] },
+      { icon:'💬', title:'情绪分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】情绪分析师通过雪球、东方财富股吧等国内平台抓取散户情绪数据，同时监控北向资金（沪股通）流入流出趋势，追踪外资机构对茅台配置态度的环比变化。',
+        signals:['北向资金追踪','股吧情绪打分','机构持仓变化'] },
+      { icon:'📰', title:'新闻分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】新闻分析师关注消费税政策动态、政务接待禁令执行情况、春节/中秋旺季动销数据及高端白酒消费复苏节奏，量化每条政策事件对茅台业绩预测的修正幅度。',
+        signals:['消费税政策','政务接待动态','节假日动销数据'] },
+      { icon:'📈', title:'技术分析师', badge:'参考RSI', badgeClass:'signal-neu',
+        text:'【流程演示示意】技术分析师基于 A 股历史 OHLCV 数据计算技术指标，关注茅台在大盘调整时的相对强弱、主力资金进出的量价信号及 120 日/250 日长期均线支撑位。右侧 RSI 为雅虎财经真实历史数据计算。',
+        signals:['相对强弱分析','主力资金动向','长期均线支撑'] }
+    ],
+    debate:[
+      { role:'多方 🐂', color:'#3fb950', msg:'【流程演示】看多研究员强调贵州茅台稀缺性护城河——产能不可快速扩张、品牌溢价全球稀缺，北向资金长期持续流入是最佳验证，消费复苏将带来戴维斯双击。' },
+      { role:'空方 🐻', color:'#f85149', msg:'【流程演示】看空研究员关注高端消费政策不确定性、渠道库存偏高压制批发价及当前市盈率相对历史均值仍处高位，存在估值回归压力。' },
+      { role:'结论 🤝', color:'#e3b341', msg:'【流程演示】研究经理综合多空辩论，认为茅台长期价值清晰但短期受宏观消费数据扰动，进入风控流程确定合理建仓时机。' }
+    ],
+    decision:{ action:'BUY', size:'由风控模型计算', target:'由目标价模型输出', stop:'由 ATR 动态止损', confidence:72 }
+  },
+  '300750.SZ': {
+    reports: [
+      { icon:'📊', title:'基本面分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】基本面分析师重点分析宁德时代碳酸锂价格变动对电芯成本的传导效应、各技术路线（磷酸铁锂 vs 三元）出货占比、储能业务毛利率及海外客户（特斯拉、宝马）合同签约节奏。',
+        signals:['锂价成本传导','储能业务增速','海外客户渗透'] },
+      { icon:'💬', title:'情绪分析师', badge:'分化', badgeClass:'signal-neu',
+        text:'【流程演示示意】情绪分析师分析新能源赛道主题资金轮动节奏，追踪公募基金季报持仓变化及外资通过深股通的配置行为，监控竞争对手（比亚迪弗迪、亿纬锂能）对机构情绪的分流影响。',
+        signals:['赛道资金轮动','公募持仓季报','竞争格局变化'] },
+      { icon:'📰', title:'新闻分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】新闻分析师重点监控各国新能源汽车补贴政策、欧盟电动车关税动态、锂矿并购新闻及宁德时代海外工厂（匈牙利、北美）建设进展，这些是估值修复的核心催化剂。',
+        signals:['新能源补贴政策','海外工厂进展','锂矿供给新闻'] },
+      { icon:'📈', title:'技术分析师', badge:'参考RSI', badgeClass:'signal-neu',
+        text:'【流程演示示意】技术分析师关注宁德时代在创业板指中的权重效应，分析大盘情绪与个股波动的联动性，识别机构建仓/减仓的量能特征及与新能源 ETF 资金流向的共振信号。',
+        signals:['创业板权重联动','ETF资金共振','量能建仓特征'] }
+    ],
+    debate:[
+      { role:'多方 🐂', color:'#3fb950', msg:'【流程演示】看多研究员聚焦宁德时代全球动力电池市占率领先、固态电池和钠离子电池技术储备雄厚，欧美产能扩张打开第二增长曲线。' },
+      { role:'空方 🐻', color:'#f85149', msg:'【流程演示】看空研究员担忧国内价格战加剧压缩毛利率、海外竞争对手（松下、LG、SKI）份额回升及锂价下行带来的库存减值风险。' },
+      { role:'结论 🤝', color:'#e3b341', msg:'【流程演示】综合评估认为宁德时代中期逻辑完整，但短期业绩兑现节奏与当前估值存在摩擦，进入风控环节进行仓位管理。' }
+    ],
+    decision:{ action:'HOLD', size:'由风控模型计算', target:'由目标价模型输出', stop:'由 ATR 动态止损', confidence:58 }
+  },
+  '002594.SZ': {
+    reports: [
+      { icon:'📊', title:'基本面分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】基本面分析师重点分析比亚迪月度销量数据（新能源乘用车+商用车）、汽车毛利率季度改善趋势、刀片电池对外销售占比，以及第五代 DM 混动技术带来的百公里油耗竞争优势。',
+        signals:['月度销量追踪','DM混动技术优势','外销电池占比'] },
+      { icon:'💬', title:'情绪分析师', badge:'看多', badgeClass:'signal-bull',
+        text:'【流程演示示意】情绪分析师追踪比亚迪车型上市后的口碑数据（懂车帝评分、投诉率）、新能源赛道资金情绪，以及机构季报对比亚迪持仓的趋势性变化，判断主力持仓意愿。',
+        signals:['口碑数据追踪','赛道情绪评分','机构持仓趋势'] },
+      { icon:'📰', title:'新闻分析师', badge:'中性', badgeClass:'signal-neu',
+        text:'【流程演示示意】新闻分析师关注比亚迪海外扩张（东南亚、欧洲、拉美建厂）、国内价格战动态、欧盟关税反倾销调查进展及竞争对手（特斯拉、小米、华为问界）新车型冲击。',
+        signals:['海外扩张进展','欧盟关税调查','竞品新车冲击'] },
+      { icon:'📈', title:'技术分析师', badge:'参考RSI', badgeClass:'signal-neu',
+        text:'【流程演示示意】技术分析师分析比亚迪趋势形态，识别月度销量数据公布前后的价格波动规律、机构资金在关键均线附近的攻防行为及 A/H 股溢价率变化对 A 股定价的参考意义。',
+        signals:['销量数据规律','均线攻防分析','AH股溢价参考'] }
+    ],
+    debate:[
+      { role:'多方 🐂', color:'#3fb950', msg:'【流程演示】看多研究员强调比亚迪垂直整合优势（电池+芯片+整车+海外工厂），月销量持续创新高验证产品力，出海打开全球定价权。' },
+      { role:'空方 🐻', color:'#f85149', msg:'【流程演示】看空研究员关注国内汽车价格战对毛利率的持续侵蚀、欧盟关税提高出口壁垒及高估值背景下机构获利了结的抛压风险。' },
+      { role:'结论 🤝', color:'#e3b341', msg:'【流程演示】研究经理评估比亚迪中长期逻辑较强，短期估值已反映部分乐观预期，综合建议进入风控模块制定分批建仓策略。' }
+    ],
+    decision:{ action:'BUY', size:'由风控模型计算', target:'由目标价模型输出', stop:'由 ATR 动态止损', confidence:68 }
+  }
+};
+
+/* ===================== 全局状态 ===================== */
+let currentTicker = 'NVDA';
+let currentMarket = 'US';
+let isRunning = false;
+let chartInstance = null;
+
+/* 每只股票的元信息：货币符号、交易所名 */
+const TICKER_INFO = {
+  'NVDA':      { currency:'$', exchange:'纳斯达克 · 美股', market:'US' },
+  'AAPL':      { currency:'$', exchange:'纳斯达克 · 美股', market:'US' },
+  'TSLA':      { currency:'$', exchange:'纳斯达克 · 美股', market:'US' },
+  '600519.SS': { currency:'¥', exchange:'上交所 · A股',   market:'CN' },
+  '300750.SZ': { currency:'¥', exchange:'深交所 · A股',   market:'CN' },
+  '002594.SZ': { currency:'¥', exchange:'深交所 · A股',   market:'CN' },
+};
+
+/* 两个市场的股票列表（用于 switchMarket） */
+const MARKET_TICKERS = {
+  US: [
+    { symbol:'NVDA',      label:'NVDA' },
+    { symbol:'AAPL',      label:'AAPL' },
+    { symbol:'TSLA',      label:'TSLA' },
+  ],
+  CN: [
+    { symbol:'600519.SS', label:'贵州茅台' },
+    { symbol:'300750.SZ', label:'宁德时代' },
+    { symbol:'002594.SZ', label:'比亚迪' },
+  ]
+};
+
+const STEPS = [
+  { id:'fund', icon:'📊', name:'基本面分析师' },
+  { id:'sent', icon:'💬', name:'情绪分析师' },
+  { id:'news', icon:'📰', name:'新闻分析师' },
+  { id:'tech', icon:'📈', name:'技术分析师' },
+  { id:'debate', icon:'⚔️', name:'多空辩论' },
+  { id:'decision', icon:'🎯', name:'交易决策' }
+];
+
+function renderSteps(activeIdx=-1, doneUpTo=-1) {
+  const c = document.getElementById('sidebarSteps');
+  c.innerHTML = STEPS.map((s,i) => {
+    let cls = 'pending', statusTxt = '等待中';
+    if (i<=doneUpTo) { cls='done'; statusTxt='已完成'; }
+    else if (i===activeIdx) { cls='running'; statusTxt='分析中...'; }
+    return `<div class="agent-step ${(i===activeIdx||i===doneUpTo)?'active':''}">
+      <div class="step-icon ${cls}">${s.icon}</div>
+      <div>
+        <div class="step-name">${s.name}</div>
+        <div class="step-status ${cls}">${statusTxt}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function switchMarket(mkt, btn) {
+  if (isRunning) return;
+  currentMarket = mkt;
+  document.querySelectorAll('.market-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // 重建 ticker 按钮
+  const tickers = MARKET_TICKERS[mkt];
+  const container = document.getElementById('tickerBtns');
+  container.innerHTML = tickers.map((t,i)=>
+    `<button class="ticker-btn ${i===0?'active':''}" onclick="selectTicker('${t.symbol}',this)">${t.label}</button>`
+  ).join('');
+  // 自动选中该市场第一只股票并重置面板
+  currentTicker = tickers[0].symbol;
+  document.getElementById('stockContent').style.display = 'none';
+  document.getElementById('idleMsg').style.display = 'flex';
+  document.getElementById('loadingMsg').style.display = 'none';
+  renderSteps();
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+
+function selectTicker(t, btn) {
+  if (isRunning) return;
+  currentTicker = t;
+  document.querySelectorAll('.ticker-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('stockContent').style.display = 'none';
+  document.getElementById('idleMsg').style.display = 'flex';
+  document.getElementById('loadingMsg').style.display = 'none';
+  renderSteps();
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+/* ===================== 通用 fetch + CORS 代理链 ===================== */
+async function fetchJSON(url) {
+  const proxies = [
+    url,
+    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  ];
+  for (const u of proxies) {
+    try {
+      const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) {
+        const data = await r.json();
+        return data;
+      }
+    } catch(e) { /* try next */ }
+  }
+  return null;
+}
+
+function calcRSI(closes, period=14) {
+  if (closes.length < period+1) return null;
+  let gains=0, losses=0;
+  for (let i=1; i<=period; i++) {
+    const d = closes[i]-closes[i-1];
+    if (d>0) gains+=d; else losses-=d;
+  }
+  let ag=gains/period, al=losses/period;
+  for (let i=period+1; i<closes.length; i++) {
+    const d = closes[i]-closes[i-1];
+    ag = (ag*(period-1)+(d>0?d:0))/period;
+    al = (al*(period-1)+(d<0?-d:0))/period;
+  }
+  if (al===0) return 100;
+  return +(100-(100/(1+(ag/al)))).toFixed(1);
+}
+
+/* ===================== 东方财富 A 股 API ===================== */
+async function fetchAShareData(symbol) {
+  // symbol 格式: '600519.SS' | '300750.SZ'
+  const [code, exchange] = symbol.split('.');
+  const mktId = exchange === 'SS' ? '1' : '0';   // 1=沪市  0=深市
+  const secid = `${mktId}.${code}`;
+
+  // 实时行情（fltt=2 表示价格保留2位小数）
+  const quoteUrl = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f43,f57,f58,f60,f107,f116,f168,f169,f170,f9&invt=2&fltt=2`;
+
+  // 近30个交易日 K 线（取45自然日确保够30条）
+  const today = new Date();
+  const since = new Date(today.getTime() - 45 * 86400000);
+  const beg = since.toISOString().slice(0,10).replace(/-/g,'');
+  const end = today.toISOString().slice(0,10).replace(/-/g,'');
+  const klineUrl = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&beg=${beg}&end=${end}`;
+
+  const [quoteData, klineData] = await Promise.all([fetchJSON(quoteUrl), fetchJSON(klineUrl)]);
+
+  let price=null, change=null, changePct=null, shortName=symbol, pe=null, eps=null;
+  let closes=[], labels=[], rsi=null, marketState=null, prevClose=null;
+
+  if (quoteData?.data) {
+    const d = quoteData.data;
+    const valid = v => v != null && v !== '-' && v !== 0;
+
+    price     = valid(d.f43) ? +d.f43 : null;
+    prevClose = valid(d.f60) ? +d.f60 : null;
+    shortName = d.f58 || symbol;
+    pe        = (valid(d.f9) && +d.f9 > 0) ? +d.f9 : null;
+
+    if (price !== null && prevClose !== null) {
+      change    = +(price - prevClose).toFixed(3);
+      changePct = change / prevClose;
+    } else if (valid(d.f169)) {
+      change    = +d.f169;
+      changePct = valid(d.f170) ? +d.f170 / 100 : null;
+    }
+
+    // A 股交易时段（北京时间 UTC+8）：09:30-11:30 / 13:00-15:00，周一至周五
+    const cst = new Date(today.getTime() + 8 * 3600000);
+    const t   = cst.getUTCHours() * 60 + cst.getUTCMinutes();
+    const dow = cst.getUTCDay();  // 0=周日 6=周六
+    const isOpen = (dow >= 1 && dow <= 5) &&
+                   ((t >= 570 && t < 690) || (t >= 780 && t < 900));
+    // 570=9:30, 690=11:30, 780=13:00, 900=15:00
+    marketState = isOpen ? 'REGULAR' : 'CLOSED';
+  }
+
+  if (klineData?.data?.klines) {
+    klineData.data.klines.forEach(line => {
+      const p  = line.split(',');
+      const cl = parseFloat(p[2]);  // p[2] = 收盘价
+      if (!isNaN(cl)) {
+        closes.push(cl);
+        labels.push(p[0].slice(5).replace('-', '/'));  // "MM/DD"
+      }
+    });
+    rsi = calcRSI(closes);
+    if (price === null && closes.length > 0) price = closes[closes.length - 1];
+    // 若 change 仍为 null 但能从 K 线推算则补算
+    if (price !== null && prevClose === null && closes.length >= 2) {
+      prevClose = closes[closes.length - 2];
+      change    = +(price - prevClose).toFixed(3);
+      changePct = change / prevClose;
+    }
+  }
+
+  return { price, change, changePct, shortName, pe, eps, closes, labels, rsi, marketState, prevClose };
+}
+
+/* ===================== 雅虎财经 美股 API ===================== */
+async function fetchStockData(symbol) {
+  // A 股走东方财富，美股走雅虎财经
+  if (symbol.includes('.SS') || symbol.includes('.SZ')) {
+    return fetchAShareData(symbol);
+  }
+
+  const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1mo&includePrePost=false`;
+  const summaryUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=price%2CdefaultKeyStatistics`;
+
+  const [chartData, summaryData] = await Promise.all([fetchJSON(chartUrl), fetchJSON(summaryUrl)]);
+
+  let price=null, change=null, changePct=null, shortName=symbol, pe=null, eps=null;
+  let closes=[], labels=[], rsi=null, marketState=null, prevClose=null;
+
+  if (chartData && chartData.chart && chartData.chart.result && chartData.chart.result.length>0) {
+    const res = chartData.chart.result[0];
+    const meta = res.meta;
+
+    price = meta.regularMarketPrice ?? null;
+    marketState = meta.marketState ?? null;         // 'REGULAR' | 'CLOSED' | 'PRE' | 'POST'
+    prevClose = meta.chartPreviousClose ?? meta.previousClose ?? null;
+
+    // Yahoo 在休市/盘前/盘后时 regularMarketChange 可能为 0 或不准
+    // 统一用 price - prevClose 重新计算，保证休市也正确
+    if (price !== null && prevClose !== null) {
+      change = price - prevClose;
+      changePct = change / prevClose;
+    } else {
+      change = meta.regularMarketChange ?? null;
+      changePct = meta.regularMarketChangePercent ?? null;
+    }
+
+    shortName = meta.shortName || meta.symbol || symbol;
+
+    const rawCloses = res.indicators?.quote?.[0]?.close ?? null;
+    const timestamps = res.timestamp ?? null;
+    if (rawCloses && timestamps) {
+      const pairs = timestamps.map((t,i) => [t, rawCloses[i]]).filter(p=>p[1]!=null);
+      closes = pairs.map(p=>p[1]);
+      labels = pairs.map(p => {
+        const d = new Date(p[0]*1000);
+        return `${d.getMonth()+1}/${d.getDate()}`;
+      });
+      // 如果 price 还是 null（极端情况），取最后一根收盘价
+      if (price === null && closes.length > 0) price = closes[closes.length-1];
+    }
+    rsi = calcRSI(closes);
+  }
+
+  if (summaryData && summaryData.quoteSummary && summaryData.quoteSummary.result && summaryData.quoteSummary.result.length>0) {
+    const res = summaryData.quoteSummary.result[0];
+    if (res.price) {
+      if (price === null) price = res.price.regularMarketPrice?.raw ?? null;
+      if (!shortName || shortName===symbol) shortName = res.price.shortName || res.price.longName || symbol;
+      if (!marketState) marketState = res.price.marketState ?? null;
+      // 用 quoteSummary 前收做兜底
+      if (prevClose === null) prevClose = res.price.regularMarketPreviousClose?.raw ?? null;
+      if (price !== null && prevClose !== null && change === null) {
+        change = price - prevClose;
+        changePct = change / prevClose;
+      }
+    }
+    if (res.defaultKeyStatistics) {
+      pe = res.defaultKeyStatistics.trailingPE?.raw ?? null;
+      eps = res.defaultKeyStatistics.trailingEps?.raw ?? null;
+    }
+  }
+
+  return { price, change, changePct, shortName, pe, eps, closes, labels, rsi, marketState, prevClose };
+}
+
+/* ===================== 主流程 ===================== */
+async function runAnalysis() {
+  if (isRunning) return;
+  isRunning = true;
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div style="width:14px;height:14px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite"></div> 获取中...';
+
+  const panel = document.getElementById('mainPanel');
+  document.getElementById('idleMsg').style.display='none';
+  document.getElementById('stockContent').style.display='none';
+  const loadMsg = document.getElementById('loadingMsg');
+  loadMsg.style.display='flex';
+  const tInfo = TICKER_INFO[currentTicker] || { currency:'$', exchange:'美股', market:'US' };
+  const dataSrc = tInfo.market === 'CN' ? '东方财富' : '雅虎财经';
+  const dataSrcEn = tInfo.market === 'CN' ? 'Eastmoney' : 'Yahoo Finance';
+  document.getElementById('loadingText').textContent = `正在从${dataSrc}获取 ${currentTicker} 实时行情...`;
+  renderSteps();
+  if (chartInstance) { chartInstance.destroy(); chartInstance=null; }
+
+  const sd = await fetchStockData(currentTicker);
+
+  loadMsg.style.display='none';
+  const sc = document.getElementById('stockContent');
+  sc.style.display='block';
+
+  const up = sd.change !== null ? sd.change >= 0 : true;
+  const cur = tInfo.currency;  // '$' 或 '¥'
+  const priceStr = sd.price !== null ? sd.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+  const changeStr = sd.change !== null
+    ? `${sd.change>=0?'+':''}${sd.change.toFixed(2)} (${sd.change>=0?'+':''}${(sd.changePct*100).toFixed(2)}%)`
+    : '暂无变动数据';
+  const peStr = sd.pe !== null ? sd.pe.toFixed(1)+'x' : '—';
+  const epsStr = sd.eps !== null ? cur+sd.eps.toFixed(2) : '—';
+  const rsiStr = sd.rsi !== null ? String(sd.rsi) : '计算中';
+  const dataAvail = sd.price !== null;
+  const errHtml = dataAvail ? '' : `<div class="err-box">⚠️ 无法连接 ${dataSrc}（${dataSrcEn}）API，可能受网络限制。股价数据暂时不可用，下方为流程演示内容。刷新页面或检查网络后重试。</div>`;
+
+  // Market state badge — adapts label & color to trading session
+  const MARKET_STATE_LABELS = {
+    'REGULAR': { text: '交易中',        color: 'var(--green)' },
+    'CLOSED':  { text: '已收盘 · 前收价', color: 'var(--text3)' },
+    'PRE':     { text: '盘前交易',       color: 'var(--amber)' },
+    'POST':    { text: '盘后交易',       color: 'var(--amber)' }
+  };
+  const mLabel = MARKET_STATE_LABELS[sd.marketState] || { text: '最新价', color: 'var(--text3)' };
+
+  const simData = SIM_REPORTS[currentTicker];
+
+  sc.innerHTML = `
+    ${errHtml}
+    <div class="stock-header">
+      <div>
+        <div class="stock-name">${currentTicker} <span style="font-size:13px;color:var(--text2);font-weight:400">${sd.shortName}</span></div>
+        <div class="stock-meta">${tInfo.exchange}</div>
+      </div>
+      <div class="stock-price">
+        <div class="price-num ${dataAvail?(up?'up':'dn'):''}">${cur}${priceStr}</div>
+        <div class="price-change ${up?'up':'dn'}">${changeStr}</div>
+        <div class="data-src"><span class="real-tag" style="color:${mLabel.color};border-color:${mLabel.color}40;background:${mLabel.color}18">● ${dataSrc} · ${mLabel.text}</span></div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-label">
+        <span class="chart-title">近 1 个月历史收盘价</span>
+        <span class="real-tag">● ${dataSrc}真实数据</span>
+      </div>
+      <canvas id="priceChart"></canvas>
+    </div>
+    <div class="metrics-row">
+      <div class="metric"><div class="metric-label">市盈率 (PE)</div><div class="metric-val">${peStr}</div><div class="metric-src"><span class="real-tag">● ${dataSrcEn}</span></div></div>
+      <div class="metric"><div class="metric-label">${tInfo.market==='CN'?'每股净资产':'每股收益 (EPS)'}</div><div class="metric-val">${epsStr}</div><div class="metric-src"><span class="real-tag">● ${dataSrcEn}</span></div></div>
+      <div class="metric"><div class="metric-label">RSI (14日)</div><div class="metric-val">${rsiStr}</div><div class="metric-src"><span class="real-tag">● 历史价格计算</span></div></div>
+      <div class="metric"><div class="metric-label">历史数据点</div><div class="metric-val">${sd.closes.length > 0 ? sd.closes.length+'d' : '—'}</div><div class="metric-src"><span class="real-tag">● ${dataSrc}</span></div></div>
+    </div>
+    <div class="sim-warning">
+      <span style="font-size:18px">⚠️</span>
+      <div class="sim-warning-text">以下智能体分析文字为<strong>流程演示示意</strong>，展示 TradingAgents 各角色的工作方式，<u>并非真实 AI 分析师报告，不构成任何投资建议</u>。</div>
+    </div>
+    <div class="agent-reports" id="reportsList"></div>
+    <div class="decision-card" id="decisionCard" style="margin-top:8px">
+      <div class="decision-action">${simData.decision.action==='BUY'?'📈 BUY':simData.decision.action==='HOLD'?'⏸ HOLD':'👀 WATCH'}</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+        <span class="sim-tag">● 流程演示 · 非真实决策</span>
+        <span style="font-size:11px;color:var(--text3)">置信度参考 ${simData.decision.confidence}%</span>
+      </div>
+      <div class="confidence-bar" style="margin-top:8px"><div class="confidence-fill" style="width:${simData.decision.confidence}%"></div></div>
+      <div class="decision-detail">
+        <div class="dd-item"><div class="dd-label">建议仓位</div><div class="dd-val">${simData.decision.size}</div></div>
+        <div class="dd-item"><div class="dd-label">目标价</div><div class="dd-val">${simData.decision.target}</div></div>
+        <div class="dd-item"><div class="dd-label">止损设置</div><div class="dd-val">${simData.decision.stop}</div></div>
+        <div class="dd-item"><div class="dd-label">分析日期</div><div class="dd-val">${new Date().toLocaleDateString('zh-CN')}</div></div>
+      </div>
+      <div class="decision-disclaimer">⚠️ 本决策为流程演示示意，不构成任何投资建议。真实 TradingAgents 系统需配置 LLM API Key 及数据源在本地运行。</div>
+    </div>
+  `;
+
+  // Draw real chart
+  if (sd.closes.length > 1) {
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    chartInstance = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels: sd.labels,
+        datasets:[{
+          data: sd.closes,
+          borderColor: up?'#3fb950':'#f85149',
+          backgroundColor: up?'rgba(63,185,80,0.07)':'rgba(248,81,73,0.07)',
+          borderWidth:2, fill:true, tension:.4, pointRadius:2,
+          pointBackgroundColor: up?'#3fb950':'#f85149'
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#6e7681',font:{size:10},maxTicksLimit:8}},
+          y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#6e7681',font:{size:10},callback:v=>cur+v.toLocaleString()}}
+        }
+      }
+    });
+  } else {
+    document.getElementById('priceChart').parentElement.innerHTML += '<p style="color:var(--text3);font-size:12px;text-align:center;padding:1rem">历史价格数据加载失败</p>';
+  }
+
+  // Animate agent reports step by step
+  const reportsList = document.getElementById('reportsList');
+  const reports = simData.reports;
+  for (let i=0; i<reports.length; i++) {
+    renderSteps(i, i-1);
+    await sleep(800);
+    const r = reports[i];
+    const card = document.createElement('div');
+    card.className = 'report-card';
+    card.innerHTML = `
+      <div class="report-header">
+        <span style="font-size:15px">${r.icon}</span>
+        <span class="report-title-text">${r.title}</span>
+        <div class="report-tags">
+          <span class="signal ${r.badgeClass}">${r.badge}</span>
+          <span class="sim-tag">流程演示</span>
+        </div>
+      </div>
+      <div class="report-text">${r.text}</div>
+      <div class="signal-row">${r.signals.map(s=>`<span class="signal signal-neu">${s}</span>`).join('')}</div>
+    `;
+    reportsList.appendChild(card);
+    await sleep(40);
+    card.classList.add('visible');
+    await sleep(550);
+  }
+
+  // Debate
+  renderSteps(4,3);
+  await sleep(800);
+  const debateCard = document.createElement('div');
+  debateCard.className = 'report-card';
+  debateCard.innerHTML = `
+    <div class="report-header">
+      <span style="font-size:15px">⚔️</span>
+      <span class="report-title-text">多空研究员辩论</span>
+      <div class="report-tags"><span class="sim-tag">流程演示</span></div>
+    </div>
+    <div class="debate-wrap">
+      ${simData.debate.map(item=>`
+        <div class="debate-item">
+          <span class="debate-role" style="color:${item.color}">${item.role}</span>
+          <span class="debate-msg">${item.msg}</span>
+        </div>`).join('')}
+    </div>`;
+  reportsList.appendChild(debateCard);
+  await sleep(40); debateCard.classList.add('visible');
+  await sleep(650);
+
+  // Decision
+  renderSteps(5,4);
+  await sleep(800);
+  renderSteps(-1,5);
+  document.getElementById('decisionCard').classList.add('visible');
+
+  btn.disabled=false;
+  btn.innerHTML='↺ 重新分析';
+  isRunning=false;
+}
+
+renderSteps();
+</script>
+</body>
+</html>
